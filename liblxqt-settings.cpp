@@ -25,9 +25,11 @@
 
 using namespace LxQt;
 
-Settings::Settings(const QString& organization, const QString& application):
-  // arrayIndex_(0),
-  QObject() {
+Settings::Settings(const QString& organization, const QString& application, QObject *parent)
+    : QObject(parent)
+    , client_(0)
+    // , arrayIndex_(0)
+{
 
   prefix_ = "/org/";
   prefix_ += organization.toLatin1();

@@ -37,7 +37,7 @@ class Settings: public QObject {
 public:
 
   explicit Settings(const QString& organization,
-                   const QString& application = QString());
+                   const QString& application = QString(), QObject *parent = 0);
   // Settings(QSettings::Scope scope, const QString& organization,
   //          const QString& application = QString());
 
