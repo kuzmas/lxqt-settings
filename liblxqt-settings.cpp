@@ -30,13 +30,9 @@ Settings::Settings(const QString& organization, const QString& application, QObj
     , client_(0)
     // , arrayIndex_(0)
 {
-
-  prefix_ = "/org/";
-  prefix_ += organization.toLatin1();
-  prefix_ += "/";
-  if(application.isEmpty()) {
-    prefix_ += application.toLatin1();
-    prefix_ += "/";
+  prefix_ = (QString("/org/") + organization + "/").toLatin1();
+  if(!application.isEmpty()) {
+    prefix_ += (application + "/").toLatin1();
   }
 
 // not sure if this condition should be compile-time:
@@ -65,8 +61,7 @@ QString Settings::applicationName() const {
 
 // FIXME: what if prefix contains '/' ?
 void Settings::beginGroup(const QString& prefix) {
-  prefix_.append(prefix);
-  prefix_.append('/');
+  prefix_.append(prefix + '/');
 
   qDebug("beginGroup, current prefix: %s", prefix_.constData());
 }
