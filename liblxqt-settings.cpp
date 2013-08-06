@@ -25,45 +25,52 @@
 
 using namespace LxQt;
 
-Settings::Settings(const QString& organization, const QString& application, QObject *parent)
+Settings::Settings(const QString &organization, const QString &application, QObject *parent)
     : QObject(parent)
     , client_(0)
     // , arrayIndex_(0)
 {
-  prefix_ = (QString("/org/") + organization + "/").toLatin1();
-  if(!application.isEmpty()) {
-    prefix_ += (application + "/").toLatin1();
-  }
+    prefix_ = (QString("/org/") + organization + "/").toLatin1();
+    if (!application.isEmpty())
+    {
+        prefix_ += (application + "/").toLatin1();
+    }
 
 // not sure if this condition should be compile-time:
 #if (G_ENCODE_VERSION (GLIB_MAJOR_VERSION, GLIB_MINOR_VERSION)) < GLIB_VERSION_2_36
-  g_type_init();
+    g_type_init();
 #endif
-  client_ = dconf_client_new();
+    client_ = dconf_client_new();
 }
 
-Settings::~Settings() {
-  if(client_)
-    g_object_unref(client_);
+Settings::~Settings()
+{
+    if (client_)
+    {
+        g_object_unref(client_);
+    }
 }
 
-QStringList Settings::allKeys() const {
-  QStringList result;
+QStringList Settings::allKeys() const
+{
+    QStringList result;
 
-  // TODO: implement
+    // TODO: implement
 
-  return result;
+    return result;
 }
 
-QString Settings::applicationName() const {
-  return applicationName_;
+QString Settings::applicationName() const
+{
+    return applicationName_;
 }
 
 // FIXME: what if prefix contains '/' ?
-void Settings::beginGroup(const QString& prefix) {
-  prefix_.append(prefix + '/');
+void Settings::beginGroup(const QString &prefix)
+{
+    prefix_.append(prefix + '/');
 
-  qDebug("beginGroup, current prefix: %s", prefix_.constData());
+    qDebug("beginGroup, current prefix: %s", prefix_.constData());
 }
 
 /*
@@ -80,140 +87,174 @@ void Settings::setArrayIndex(int i) {
 }
 */
 
-QStringList Settings::childGroups() const {
-  QStringList result;
-  int len;
-  char** keys = dconf_client_list(client_, prefix_.constData(), &len);
+QStringList Settings::childGroups() const
+{
+    QStringList result;
+    int len;
+    char **keys = dconf_client_list(client_, prefix_.constData(), &len);
 
-  if(keys) {
-    for(char** key = keys; *key; ++key) {
-      if(dconf_is_dir(*key, NULL))
-        result.append(*key);
+    if (keys)
+    {
+        for (char **key = keys; *key; ++key)
+        {
+            if (dconf_is_dir(*key, NULL))
+            {
+                result.append(*key);
+            }
+        }
+
+        g_strfreev(keys);
     }
 
-    g_strfreev(keys);
-  }
-
-  return result;
+    return result;
 }
 
-QStringList Settings::childKeys() const {
-  QStringList result;
-  int len;
-  char** keys = dconf_client_list(client_, prefix_.constData(), &len);
+QStringList Settings::childKeys() const
+{
+    QStringList result;
+    int len;
+    char **keys = dconf_client_list(client_, prefix_.constData(), &len);
 
-  if(keys) {
-    for(char** key = keys; *key; ++key) {
-      if(!dconf_is_key(*key, NULL)) // if this is not a dir
-        result.append(*key);
+    if (keys)
+    {
+        for (char **key = keys; *key; ++key)
+        {
+            if (!dconf_is_key(*key, NULL)) // if this is not a dir
+            {
+                result.append(*key);
+            }
+        }
+
+        g_strfreev(keys);
     }
 
-    g_strfreev(keys);
-  }
-
-  return result;
+    return result;
 }
 
-void Settings::clear() {
+void Settings::clear()
+{
 
 }
 
-bool Settings::contains(const QString& key) const {
-  return false;
+bool Settings::contains(const QString &key) const
+{
+    return false;
 }
 
-void Settings::endGroup() {
-  if(prefix_.length() > 2) {
-    int sep = prefix_.lastIndexOf('/', prefix_.length() - 2);
-    if(sep != -1) {
-      prefix_ = prefix_.left(sep + 1);
+void Settings::endGroup()
+{
+    if (prefix_.length() > 2)
+    {
+        int sep = prefix_.lastIndexOf('/', prefix_.length() - 2);
+        if (sep != -1)
+        {
+            prefix_ = prefix_.left(sep + 1);
+        }
+        qDebug("endGroup, current prefix: %s", prefix_.constData());
     }
-    qDebug("endGroup, current prefix: %s", prefix_.constData());
-  }
 }
 
-bool Settings::fallbacksEnabled() const {
-  return false;
+bool Settings::fallbacksEnabled() const
+{
+    return false;
 }
 
-QString Settings::fileName() const {
-  return QString();
+QString Settings::fileName() const
+{
+    return QString();
 }
 
-QString Settings::group() const {
-  if(prefix_.length() > 2) {
-    int sep = prefix_.lastIndexOf('/', prefix_.length() - 2);
-    if(sep != -1) {
-      ++sep;
-      return prefix_.mid(sep, prefix_.length() - sep - 1);
+QString Settings::group() const
+{
+    if (prefix_.length() > 2)
+    {
+        int sep = prefix_.lastIndexOf('/', prefix_.length() - 2);
+        if (sep != -1)
+        {
+            ++sep;
+            return prefix_.mid(sep, prefix_.length() - sep - 1);
+        }
     }
-  }
-  return QString();
+    return QString();
 }
 
-bool Settings::isWritable() const {
-  return bool(dconf_client_is_writable(client_, prefix_.constData()));
+bool Settings::isWritable() const
+{
+    return bool(dconf_client_is_writable(client_, prefix_.constData()));
 }
 
-QString Settings::organizationName() const {
-  return organizationName_;
+QString Settings::organizationName() const
+{
+    return organizationName_;
 }
 
-void Settings::remove(const QString& key) {
-  QByteArray path = prefix_ + key.toLatin1();
-  dconf_client_write_sync(client_, path.constData(), NULL, NULL, NULL, NULL);
+void Settings::remove(const QString &key)
+{
+    QByteArray path = prefix_ + key.toLatin1();
+    dconf_client_write_sync(client_, path.constData(), NULL, NULL, NULL, NULL);
 }
 
-QSettings::Scope Settings::scope() const {
-  return QSettings::UserScope; // FIXME: will this cause problems?
+QSettings::Scope Settings::scope() const
+{
+    return QSettings::UserScope; // FIXME: will this cause problems?
 }
 
-void Settings::setFallbacksEnabled(bool b) {
-  qWarning("setFallbacksEnabled(bool b) is not supported.");
+void Settings::setFallbacksEnabled(bool b)
+{
+    qWarning("setFallbacksEnabled(bool b) is not supported.");
 }
 
-void Settings::setValue(const QString& key, const QVariant& value) {
-  GError* err = NULL;
-  QString str = variantToString(value);
-  QByteArray path = prefix_ + key.toLatin1();
-  GVariant* val = g_variant_new_string(str.toUtf8().constData());
-  g_variant_ref_sink(val);
-  qDebug("setValue: path: %s, value: %s", path.constData(), g_variant_get_string(val, NULL));
-  dconf_client_write_fast(client_, path.constData(), val, &err);
-  if(val)
-    g_variant_unref(val);
+void Settings::setValue(const QString &key, const QVariant &value)
+{
+    GError *err = NULL;
+    QString str = variantToString(value);
+    QByteArray path = prefix_ + key.toLatin1();
+    GVariant *val = g_variant_new_string(str.toUtf8().constData());
+    g_variant_ref_sink(val);
+    qDebug("setValue: path: %s, value: %s", path.constData(), g_variant_get_string(val, NULL));
+    dconf_client_write_fast(client_, path.constData(), val, &err);
+    if (val)
+    {
+        g_variant_unref(val);
+    }
 
-  if(err) {
-    qDebug("error: %s", err->message);
-    g_error_free(err);
-  }
+    if (err)
+    {
+        qDebug("error: %s", err->message);
+        g_error_free(err);
+    }
 }
 
-QSettings::Status Settings::status() const {
-  return QSettings::NoError; // FIXME: should we omit errors?
+QSettings::Status Settings::status() const
+{
+    return QSettings::NoError; // FIXME: should we omit errors?
 }
 
-void Settings::sync() {
-  dconf_client_sync(client_);
+void Settings::sync()
+{
+    dconf_client_sync(client_);
 }
 
 // taken from Qt source code (src/corelib/io/qsettings.cpp).
 // Copyright (C) 2013 Digia Plc and/or its subsidiary(-ies).
 // license: LGPL
-QString Settings::variantToString(const QVariant& v) {
-  QString result;
+QString Settings::variantToString(const QVariant &v)
+{
+    QString result;
 
-  switch(v.type()) {
+    switch (v.type())
+    {
     case QVariant::Invalid:
-      result = QLatin1String("@Invalid()");
-      break;
+        result = QLatin1String("@Invalid()");
+        break;
 
-    case QVariant::ByteArray: {
-      QByteArray a = v.toByteArray();
-      result = QLatin1String("@ByteArray(");
-      result += QString::fromLatin1(a.constData(), a.size());
-      result += QLatin1Char(')');
-      break;
+    case QVariant::ByteArray:
+    {
+        QByteArray a = v.toByteArray();
+        result = QLatin1String("@ByteArray(");
+        result += QString::fromLatin1(a.constData(), a.size());
+        result += QLatin1Char(')');
+        break;
     }
 
     case QVariant::String:
@@ -223,124 +264,148 @@ QString Settings::variantToString(const QVariant& v) {
     case QVariant::UInt:
     case QVariant::Bool:
     case QVariant::Double:
-    case QVariant::KeySequence: {
-      result = v.toString();
+    case QVariant::KeySequence:
+    {
+        result = v.toString();
 
-      if(result.startsWith(QLatin1Char('@')))
-        result.prepend(QLatin1Char('@'));
+        if (result.startsWith(QLatin1Char('@')))
+        {
+            result.prepend(QLatin1Char('@'));
+        }
 
-      break;
+        break;
     }
 #ifndef QT_NO_GEOM_VARIANT
-    case QVariant::Rect: {
-      QRect r = qvariant_cast<QRect>(v);
-      result += QLatin1String("@Rect(");
-      result += QString::number(r.x());
-      result += QLatin1Char(' ');
-      result += QString::number(r.y());
-      result += QLatin1Char(' ');
-      result += QString::number(r.width());
-      result += QLatin1Char(' ');
-      result += QString::number(r.height());
-      result += QLatin1Char(')');
-      break;
+    case QVariant::Rect:
+    {
+        QRect r = qvariant_cast<QRect>(v);
+        result += QLatin1String("@Rect(");
+        result += QString::number(r.x());
+        result += QLatin1Char(' ');
+        result += QString::number(r.y());
+        result += QLatin1Char(' ');
+        result += QString::number(r.width());
+        result += QLatin1Char(' ');
+        result += QString::number(r.height());
+        result += QLatin1Char(')');
+        break;
     }
-    case QVariant::Size: {
-      QSize s = qvariant_cast<QSize>(v);
-      result += QLatin1String("@Size(");
-      result += QString::number(s.width());
-      result += QLatin1Char(' ');
-      result += QString::number(s.height());
-      result += QLatin1Char(')');
-      break;
+    case QVariant::Size:
+    {
+        QSize s = qvariant_cast<QSize>(v);
+        result += QLatin1String("@Size(");
+        result += QString::number(s.width());
+        result += QLatin1Char(' ');
+        result += QString::number(s.height());
+        result += QLatin1Char(')');
+        break;
     }
-    case QVariant::Point: {
-      QPoint p = qvariant_cast<QPoint>(v);
-      result += QLatin1String("@Point(");
-      result += QString::number(p.x());
-      result += QLatin1Char(' ');
-      result += QString::number(p.y());
-      result += QLatin1Char(')');
-      break;
+    case QVariant::Point:
+    {
+        QPoint p = qvariant_cast<QPoint>(v);
+        result += QLatin1String("@Point(");
+        result += QString::number(p.x());
+        result += QLatin1Char(' ');
+        result += QString::number(p.y());
+        result += QLatin1Char(')');
+        break;
     }
 #endif // !QT_NO_GEOM_VARIANT
 
-    default: {
+    default:
+    {
 #ifndef QT_NO_DATASTREAM
-      QByteArray a;
-      {
-        QDataStream s(&a, QIODevice::WriteOnly);
-        s.setVersion(QDataStream::Qt_4_0);
-        s << v;
-      }
+        QByteArray a;
+        {
+            QDataStream s(&a, QIODevice::WriteOnly);
+            s.setVersion(QDataStream::Qt_4_0);
+            s << v;
+        }
 
-      result = QLatin1String("@Variant(");
-      result += QString::fromLatin1(a.constData(), a.size());
-      result += QLatin1Char(')');
+        result = QLatin1String("@Variant(");
+        result += QString::fromLatin1(a.constData(), a.size());
+        result += QLatin1Char(')');
 #else
-      Q_ASSERT(!"QSettings: Cannot save custom types without QDataStream support");
+        Q_ASSERT(!"QSettings: Cannot save custom types without QDataStream support");
 #endif
-      break;
+        break;
     }
-  }
+    }
 
-  return result;
+    return result;
 }
 
 
 // taken from Qt source code (src/corelib/io/qsettings.cpp).
 // Copyright (C) 2013 Digia Plc and/or its subsidiary(-ies).
 // license: LGPL
-QVariant Settings::stringToVariant(const QString& s) {
-  if(s.startsWith(QLatin1Char('@'))) {
-    if(s.endsWith(QLatin1Char(')'))) {
-      if(s.startsWith(QLatin1String("@ByteArray("))) {
-        return QVariant(s.toLatin1().mid(11, s.size() - 12));
-      }
-      else if(s.startsWith(QLatin1String("@Variant("))) {
+QVariant Settings::stringToVariant(const QString &s)
+{
+    if (s.startsWith(QLatin1Char('@')))
+    {
+        if (s.endsWith(QLatin1Char(')')))
+        {
+            if (s.startsWith(QLatin1String("@ByteArray(")))
+            {
+                return QVariant(s.toLatin1().mid(11, s.size() - 12));
+            }
+            else if (s.startsWith(QLatin1String("@Variant(")))
+            {
 #ifndef QT_NO_DATASTREAM
-        QByteArray a(s.toLatin1().mid(9));
-        QDataStream stream(&a, QIODevice::ReadOnly);
-        stream.setVersion(QDataStream::Qt_4_0);
-        QVariant result;
-        stream >> result;
-        return result;
+                QByteArray a(s.toLatin1().mid(9));
+                QDataStream stream(&a, QIODevice::ReadOnly);
+                stream.setVersion(QDataStream::Qt_4_0);
+                QVariant result;
+                stream >> result;
+                return result;
 #else
-        Q_ASSERT(!"QSettings: Cannot load custom types without QDataStream support");
+                Q_ASSERT(!"QSettings: Cannot load custom types without QDataStream support");
 #endif
 #ifndef QT_NO_GEOM_VARIANT
-      }
-      else if(s.startsWith(QLatin1String("@Rect("))) {
-        QStringList args = splitArgs(s, 5);
+            }
+            else if (s.startsWith(QLatin1String("@Rect(")))
+            {
+                QStringList args = splitArgs(s, 5);
 
-        if(args.size() == 4)
-          return QVariant(QRect(args[0].toInt(), args[1].toInt(), args[2].toInt(), args[3].toInt()));
-      }
-      else if(s.startsWith(QLatin1String("@Size("))) {
-        QStringList args = splitArgs(s, 5);
+                if (args.size() == 4)
+                {
+                    return QVariant(QRect(args[0].toInt(), args[1].toInt(), args[2].toInt(), args[3].toInt()));
+                }
+            }
+            else if (s.startsWith(QLatin1String("@Size(")))
+            {
+                QStringList args = splitArgs(s, 5);
 
-        if(args.size() == 2)
-          return QVariant(QSize(args[0].toInt(), args[1].toInt()));
-      }
-      else if(s.startsWith(QLatin1String("@Point("))) {
-        QStringList args = splitArgs(s, 6);
+                if (args.size() == 2)
+                {
+                    return QVariant(QSize(args[0].toInt(), args[1].toInt()));
+                }
+            }
+            else if (s.startsWith(QLatin1String("@Point(")))
+            {
+                QStringList args = splitArgs(s, 6);
 
-        if(args.size() == 2)
-          return QVariant(QPoint(args[0].toInt(), args[1].toInt()));
+                if (args.size() == 2)
+                {
+                    return QVariant(QPoint(args[0].toInt(), args[1].toInt()));
+                }
 
 #endif
-      }
-      else if(s == QLatin1String("@Invalid()")) {
-        return QVariant();
-      }
+            }
+            else if (s == QLatin1String("@Invalid()"))
+            {
+                return QVariant();
+            }
 
+        }
+
+        if (s.startsWith(QLatin1String("@@")))
+        {
+            return QVariant(s.mid(1));
+        }
     }
 
-    if(s.startsWith(QLatin1String("@@")))
-      return QVariant(s.mid(1));
-  }
-
-  return QVariant(s);
+    return QVariant(s);
 }
 
 // taken from Qt source code (src/corelib/io/qsettings.cpp).
@@ -356,15 +421,21 @@ QStringList Settings::splitArgs(const QString &s, int idx)
     QStringList result;
     QString item;
 
-    for (++idx; idx < l; ++idx) {
+    for (++idx; idx < l; ++idx)
+    {
         QChar c = s.at(idx);
-        if (c == QLatin1Char(')')) {
+        if (c == QLatin1Char(')'))
+        {
             Q_ASSERT(idx == l - 1);
             result.append(item);
-        } else if (c == QLatin1Char(' ')) {
+        }
+        else if (c == QLatin1Char(' '))
+        {
             result.append(item);
             item.clear();
-        } else {
+        }
+        else
+        {
             item.append(c);
         }
     }
@@ -372,18 +443,21 @@ QStringList Settings::splitArgs(const QString &s, int idx)
     return result;
 }
 
-QVariant Settings::value(const QString& key, const QVariant& defaultValue) const {
-  QByteArray path = prefix_ + key.toLatin1();
-  qDebug("value(), path: %s", path.constData());
-  GVariant* val = dconf_client_read(client_, path.constData());
-  if(val) {
-    const char* str = g_variant_get_string(val, NULL);
-    if(str) {
-      QVariant qv = stringToVariant(str);
-      // g_variant_unref(val);
-      return qv;
+QVariant Settings::value(const QString &key, const QVariant &defaultValue) const
+{
+    QByteArray path = prefix_ + key.toLatin1();
+    qDebug("value(), path: %s", path.constData());
+    GVariant *val = dconf_client_read(client_, path.constData());
+    if (val)
+    {
+        const char *str = g_variant_get_string(val, NULL);
+        if (str)
+        {
+            QVariant qv = stringToVariant(str);
+            // g_variant_unref(val);
+            return qv;
+        }
+        // g_variant_unref(val);
     }
-    // g_variant_unref(val);
-  }
-  return defaultValue;
+    return defaultValue;
 }

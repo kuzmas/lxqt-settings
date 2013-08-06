@@ -30,76 +30,78 @@ extern "C" { // dconf does not do extern "C" properly in its header
 
 #include <QSettings>
 
-namespace LxQt {
+namespace LxQt
+{
 
-class Settings: public QObject {
-  Q_OBJECT
+class Settings: public QObject
+{
+    Q_OBJECT
 public:
 
-  explicit Settings(const QString& organization,
-                   const QString& application = QString(), QObject *parent = 0);
-  // Settings(QSettings::Scope scope, const QString& organization,
-  //          const QString& application = QString());
+    explicit Settings(const QString &organization,
+                      const QString &application = QString(), QObject *parent = 0);
+    // Settings(QSettings::Scope scope, const QString& organization,
+    //          const QString& application = QString());
 
-  // Settings(QSettings::Format format, Scope scope, const QString& organization,
-  //          const QString& application = QString());
+    // Settings(QSettings::Format format, Scope scope, const QString& organization,
+    //          const QString& application = QString());
 
-  // Settings(const QString& fileName, Format format);
+    // Settings(const QString& fileName, Format format);
 
-  ~Settings();
+    ~Settings();
 
-  void clear(); // does nothing
-  void sync();
-  QSettings::Status status() const;
+    void clear(); // does nothing
+    void sync();
+    QSettings::Status status() const;
 
-  void beginGroup(const QString& prefix);
-  void endGroup();
-  QString group() const;
+    void beginGroup(const QString &prefix);
+    void endGroup();
+    QString group() const;
 
-  // int beginReadArray(const QString& prefix);
-  // void beginWriteArray(const QString& prefix, int size = -1);
-  // void endArray();
-  // void setArrayIndex(int i);
+    // int beginReadArray(const QString& prefix);
+    // void beginWriteArray(const QString& prefix, int size = -1);
+    // void endArray();
+    // void setArrayIndex(int i);
 
-  QStringList allKeys() const;
-  QStringList childKeys() const;
-  QStringList childGroups() const;
-  bool isWritable() const;
+    QStringList allKeys() const;
+    QStringList childKeys() const;
+    QStringList childGroups() const;
+    bool isWritable() const;
 
-  void setValue(const QString& key, const QVariant& value);
-  QVariant value(const QString& key, const QVariant& defaultValue = QVariant()) const;
+    void setValue(const QString &key, const QVariant &value);
+    QVariant value(const QString &key, const QVariant &defaultValue = QVariant()) const;
 
-  void remove(const QString& key);
-  bool contains(const QString& key) const;
+    void remove(const QString &key);
+    bool contains(const QString &key) const;
 
-  void setFallbacksEnabled(bool b); // does nothing
-  bool fallbacksEnabled() const;
+    void setFallbacksEnabled(bool b); // does nothing
+    bool fallbacksEnabled() const;
 
-  QString fileName() const; // does nothing
-  QSettings::Format format() const; // does nothing
-  QSettings::Scope scope() const; // does nothing
-  QString organizationName() const;
-  QString applicationName() const;
+    QString fileName() const; // does nothing
+    QSettings::Format format() const; // does nothing
+    QSettings::Scope scope() const; // does nothing
+    QString organizationName() const;
+    QString applicationName() const;
 
-  /*
-  static void setDefaultFormat(Format format);
-  static Format defaultFormat();
-  static void setPath(Format format, Scope scope, const QString& path);
-  */
+    /*
+    static void setDefaultFormat(Format format);
+    static Format defaultFormat();
+    static void setPath(Format format, Scope scope, const QString& path);
+    */
 private:
-  static QString variantToString(const QVariant& v);
-  static QVariant stringToVariant(const QString& s);
-  static QStringList splitArgs(const QString &s, int idx);
+    static QString variantToString(const QVariant &v);
+    static QVariant stringToVariant(const QString &s);
+    static QStringList splitArgs(const QString &s, int idx);
 
 private Q_SLOTS:
 
 private:
-  DConfClient* client_;
-  QString organizationName_;
-  QString applicationName_;
-  QByteArray prefix_;
-  // int arrayIndex_;
-  Q_DISABLE_COPY(Settings)
+    DConfClient *client_;
+    QString organizationName_;
+    QString applicationName_;
+    QByteArray prefix_;
+    // int arrayIndex_;
+    Q_DISABLE_COPY(Settings)
 };
 
 }
