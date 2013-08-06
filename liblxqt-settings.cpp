@@ -39,7 +39,10 @@ Settings::Settings(const QString& organization, const QString& application, QObj
     prefix_ += "/";
   }
 
+// not sure if this condition should be compile-time:
+#if (G_ENCODE_VERSION (GLIB_MAJOR_VERSION, GLIB_MINOR_VERSION)) < GLIB_VERSION_2_36
   g_type_init();
+#endif
   client_ = dconf_client_new();
 }
 
