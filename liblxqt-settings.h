@@ -48,7 +48,7 @@ public:
 
   ~Settings();
 
-  void clear();
+  void clear(); // does nothing
   void sync();
   QSettings::Status status() const;
 
@@ -72,12 +72,12 @@ public:
   void remove(const QString& key);
   bool contains(const QString& key) const;
 
-  void setFallbacksEnabled(bool b);
+  void setFallbacksEnabled(bool b); // does nothing
   bool fallbacksEnabled() const;
 
-  QString fileName() const;
-  QSettings::Format format() const;
-  QSettings::Scope scope() const;
+  QString fileName() const; // does nothing
+  QSettings::Format format() const; // does nothing
+  QSettings::Scope scope() const; // does nothing
   QString organizationName() const;
   QString applicationName() const;
 

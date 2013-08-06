@@ -49,6 +49,8 @@ Settings::~Settings() {
 QStringList Settings::allKeys() const {
   QStringList result;
 
+  // TODO: implement
+
   return result;
 }
 
@@ -56,6 +58,7 @@ QString Settings::applicationName() const {
   return applicationName_;
 }
 
+// FIXME: what if prefix contains '/' ?
 void Settings::beginGroup(const QString& prefix) {
   prefix_.append(prefix);
   prefix_.append('/');
