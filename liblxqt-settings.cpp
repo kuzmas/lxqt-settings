@@ -19,39 +19,159 @@
 
 #include "liblxqt-settings.h"
 
+#include <QCoreApplication>
 #include <QSize>
 #include <QPoint>
 #include <QRect>
 
-using namespace LxQt;
+extern "C" { // dconf does not do extern "C" properly in its header
+#include <dconf/dconf.h>
+}
 
-Settings::Settings(const QString &organization, const QString &application, QObject *parent)
-    : QObject(parent)
-    , client_(0)
-    // , arrayIndex_(0)
+namespace LxQt {
+
+static QString variantToString(const QVariant &v);
+static QVariant stringToVariant(const QString &s);
+static QStringList splitArgs(const QString &s, int idx);
+
+class SettingsPrivate
 {
-    prefix_ = (QString("/org/") + organization + "/").toLatin1();
-    if (!application.isEmpty())
+    Settings *q_ptr;
+    Q_DECLARE_PUBLIC(Settings)
+
+public:
+    SettingsPrivate(const QString &organization, const QString &application);
+    ~SettingsPrivate();
+
+    void clear(); // does nothing
+    void sync();
+    QSettings::Status status() const;
+
+    void beginGroup(const QString &prefix);
+    void endGroup();
+    QString group() const;
+
+    int beginReadArray(const QString& prefix);
+    void beginWriteArray(const QString& prefix, int size = -1);
+    void endArray();
+    void setArrayIndex(int i);
+
+    QStringList allKeys() const;
+    QStringList childKeys() const;
+    QStringList childGroups() const;
+    bool isWritable() const;
+
+    void setValue(const QString &key, const QVariant &value);
+    QVariant value(const QString &key, const QVariant &defaultValue = QVariant()) const;
+
+    void remove(const QString &key);
+    bool contains(const QString &key) const;
+
+    QString organizationName() const;
+    QString applicationName() const;
+
+private:
+    DConfClient *m_client;
+    QString m_organizationName;
+    QString m_applicationName;
+    QByteArray m_prefix; // QStringList ?
+    // int m_arrayIndex;
+};
+
+SettingsPrivate::SettingsPrivate(const QString &organization, const QString &application)
+    : m_client(0)
+    , m_organizationName(organization)
+    , m_applicationName(application)
+{
+    m_prefix = (QString("/org/") + m_organizationName + "/").toLatin1();
+    if (!m_applicationName.isEmpty())
     {
-        prefix_ += (application + "/").toLatin1();
+        m_prefix += (m_applicationName + "/").toLatin1();
     }
 
 // not sure if this condition should be compile-time:
 #if (G_ENCODE_VERSION (GLIB_MAJOR_VERSION, GLIB_MINOR_VERSION)) < GLIB_VERSION_2_36
     g_type_init();
 #endif
-    client_ = dconf_client_new();
+    m_client = dconf_client_new();
 }
 
-Settings::~Settings()
+SettingsPrivate::~SettingsPrivate()
 {
-    if (client_)
+    if (m_client)
     {
-        g_object_unref(client_);
+        g_object_unref(m_client);
     }
 }
 
-QStringList Settings::allKeys() const
+void SettingsPrivate::clear()
+{
+
+}
+
+void SettingsPrivate::sync()
+{
+    dconf_client_sync(m_client);
+}
+
+QSettings::Status SettingsPrivate::status() const
+{
+    return QSettings::NoError; // FIXME: should we omit errors?
+}
+
+// FIXME: what if prefix contains '/' ?
+void SettingsPrivate::beginGroup(const QString &prefix)
+{
+    m_prefix.append(prefix + '/');
+
+    qDebug("beginGroup, current prefix: %s", m_prefix.constData());
+}
+
+void SettingsPrivate::endGroup()
+{
+    if (m_prefix.length() > 2)
+    {
+        int sep = m_prefix.lastIndexOf('/', m_prefix.length() - 2);
+        if (sep != -1)
+        {
+            m_prefix = m_prefix.left(sep + 1);
+        }
+        qDebug("endGroup, current prefix: %s", m_prefix.constData());
+    }
+}
+
+QString SettingsPrivate::group() const
+{
+    if (m_prefix.length() > 2)
+    {
+        int sep = m_prefix.lastIndexOf('/', m_prefix.length() - 2);
+        if (sep != -1)
+        {
+            ++sep;
+            return m_prefix.mid(sep, m_prefix.length() - sep - 1);
+        }
+    }
+    return QString();
+}
+
+int SettingsPrivate::beginReadArray(const QString &prefix)
+{
+    return 0;
+}
+
+void SettingsPrivate::beginWriteArray(const QString &prefix, int size)
+{
+}
+
+void SettingsPrivate::endArray()
+{
+}
+
+void SettingsPrivate::setArrayIndex(int i)
+{
+}
+
+QStringList SettingsPrivate::allKeys() const
 {
     QStringList result;
 
@@ -60,60 +180,11 @@ QStringList Settings::allKeys() const
     return result;
 }
 
-QString Settings::applicationName() const
-{
-    return applicationName_;
-}
-
-// FIXME: what if prefix contains '/' ?
-void Settings::beginGroup(const QString &prefix)
-{
-    prefix_.append(prefix + '/');
-
-    qDebug("beginGroup, current prefix: %s", prefix_.constData());
-}
-
-/*
-int Settings::beginReadArray(const QString& prefix) {
-}
-
-void Settings::beginWriteArray(const QString& prefix, int size) {
-}
-
-void Settings::endArray() {
-}
-
-void Settings::setArrayIndex(int i) {
-}
-*/
-
-QStringList Settings::childGroups() const
+QStringList SettingsPrivate::childKeys() const
 {
     QStringList result;
     int len;
-    char **keys = dconf_client_list(client_, prefix_.constData(), &len);
-
-    if (keys)
-    {
-        for (char **key = keys; *key; ++key)
-        {
-            if (dconf_is_dir(*key, NULL))
-            {
-                result.append(*key);
-            }
-        }
-
-        g_strfreev(keys);
-    }
-
-    return result;
-}
-
-QStringList Settings::childKeys() const
-{
-    QStringList result;
-    int len;
-    char **keys = dconf_client_list(client_, prefix_.constData(), &len);
+    char **keys = dconf_client_list(m_client, m_prefix.constData(), &len);
 
     if (keys)
     {
@@ -131,88 +202,42 @@ QStringList Settings::childKeys() const
     return result;
 }
 
-void Settings::clear()
+QStringList SettingsPrivate::childGroups() const
 {
+    QStringList result;
+    int len;
+    char **keys = dconf_client_list(m_client, m_prefix.constData(), &len);
 
-}
-
-bool Settings::contains(const QString &key) const
-{
-    return false;
-}
-
-void Settings::endGroup()
-{
-    if (prefix_.length() > 2)
+    if (keys)
     {
-        int sep = prefix_.lastIndexOf('/', prefix_.length() - 2);
-        if (sep != -1)
+        for (char **key = keys; *key; ++key)
         {
-            prefix_ = prefix_.left(sep + 1);
+            if (dconf_is_dir(*key, NULL))
+            {
+                result.append(*key);
+            }
         }
-        qDebug("endGroup, current prefix: %s", prefix_.constData());
+
+        g_strfreev(keys);
     }
+
+    return result;
 }
 
-bool Settings::fallbacksEnabled() const
+bool SettingsPrivate::isWritable() const
 {
-    return false;
+    return bool(dconf_client_is_writable(m_client, m_prefix.constData()));
 }
 
-QString Settings::fileName() const
-{
-    return QString();
-}
-
-QString Settings::group() const
-{
-    if (prefix_.length() > 2)
-    {
-        int sep = prefix_.lastIndexOf('/', prefix_.length() - 2);
-        if (sep != -1)
-        {
-            ++sep;
-            return prefix_.mid(sep, prefix_.length() - sep - 1);
-        }
-    }
-    return QString();
-}
-
-bool Settings::isWritable() const
-{
-    return bool(dconf_client_is_writable(client_, prefix_.constData()));
-}
-
-QString Settings::organizationName() const
-{
-    return organizationName_;
-}
-
-void Settings::remove(const QString &key)
-{
-    QByteArray path = prefix_ + key.toLatin1();
-    dconf_client_write_sync(client_, path.constData(), NULL, NULL, NULL, NULL);
-}
-
-QSettings::Scope Settings::scope() const
-{
-    return QSettings::UserScope; // FIXME: will this cause problems?
-}
-
-void Settings::setFallbacksEnabled(bool b)
-{
-    qWarning("setFallbacksEnabled(bool b) is not supported.");
-}
-
-void Settings::setValue(const QString &key, const QVariant &value)
+void SettingsPrivate::setValue(const QString &key, const QVariant &value)
 {
     GError *err = NULL;
     QString str = variantToString(value);
-    QByteArray path = prefix_ + key.toLatin1();
+    QByteArray path = m_prefix + key.toLatin1();
     GVariant *val = g_variant_new_string(str.toUtf8().constData());
     g_variant_ref_sink(val);
     qDebug("setValue: path: %s, value: %s", path.constData(), g_variant_get_string(val, NULL));
-    dconf_client_write_fast(client_, path.constData(), val, &err);
+    dconf_client_write_fast(m_client, path.constData(), val, &err);
     if (val)
     {
         g_variant_unref(val);
@@ -225,20 +250,50 @@ void Settings::setValue(const QString &key, const QVariant &value)
     }
 }
 
-QSettings::Status Settings::status() const
+QVariant SettingsPrivate::value(const QString &key, const QVariant &defaultValue) const
 {
-    return QSettings::NoError; // FIXME: should we omit errors?
+    QByteArray path = m_prefix + key.toLatin1();
+    qDebug("value(), path: %s", path.constData());
+    GVariant *val = dconf_client_read(m_client, path.constData());
+    if (val)
+    {
+        const char *str = g_variant_get_string(val, NULL);
+        if (str)
+        {
+            QVariant qv = stringToVariant(str);
+            // g_variant_unref(val);
+            return qv;
+        }
+        // g_variant_unref(val);
+    }
+    return defaultValue;
 }
 
-void Settings::sync()
+void SettingsPrivate::remove(const QString &key)
 {
-    dconf_client_sync(client_);
+    QByteArray path = m_prefix + key.toLatin1();
+    dconf_client_write_sync(m_client, path.constData(), NULL, NULL, NULL, NULL);
+}
+
+bool SettingsPrivate::contains(const QString &key) const
+{
+    return false;
+}
+
+QString SettingsPrivate::organizationName() const
+{
+    return m_organizationName;
+}
+
+QString SettingsPrivate::applicationName() const
+{
+    return m_applicationName;
 }
 
 // taken from Qt source code (src/corelib/io/qsettings.cpp).
 // Copyright (C) 2013 Digia Plc and/or its subsidiary(-ies).
 // license: LGPL
-QString Settings::variantToString(const QVariant &v)
+static QString variantToString(const QVariant &v)
 {
     QString result;
 
@@ -339,7 +394,7 @@ QString Settings::variantToString(const QVariant &v)
 // taken from Qt source code (src/corelib/io/qsettings.cpp).
 // Copyright (C) 2013 Digia Plc and/or its subsidiary(-ies).
 // license: LGPL
-QVariant Settings::stringToVariant(const QString &s)
+static QVariant stringToVariant(const QString &s)
 {
     if (s.startsWith(QLatin1Char('@')))
     {
@@ -411,7 +466,7 @@ QVariant Settings::stringToVariant(const QString &s)
 // taken from Qt source code (src/corelib/io/qsettings.cpp).
 // Copyright (C) 2013 Digia Plc and/or its subsidiary(-ies).
 // license: LGPL
-QStringList Settings::splitArgs(const QString &s, int idx)
+static QStringList splitArgs(const QString &s, int idx)
 {
     int l = s.length();
     Q_ASSERT(l > 0);
@@ -443,21 +498,154 @@ QStringList Settings::splitArgs(const QString &s, int idx)
     return result;
 }
 
+
+
+Settings::Settings(QObject *parent)
+    : QObject(parent)
+    , d_ptr(new SettingsPrivate(
+#ifdef Q_OS_MAC
+        QCoreApplication::organizationDomain().isEmpty()
+            ? QCoreApplication::organizationName()
+            : QCoreApplication::organizationDomain() ,
+#else
+        QCoreApplication::organizationName().isEmpty()
+            ? QCoreApplication::organizationDomain()
+            : QCoreApplication::organizationName() ,
+#endif
+        QCoreApplication::applicationName()))
+{
+}
+
+Settings::Settings(const QString &organization, const QString &application, QObject *parent)
+    : QObject(parent)
+    , d_ptr(new SettingsPrivate(organization, application))
+{
+}
+
+Settings::~Settings()
+{
+    sync();
+    delete d_ptr;
+}
+
+void Settings::clear()
+{
+    Q_D(Settings);
+    d->clear();
+}
+
+void Settings::sync()
+{
+    Q_D(Settings);
+    d->sync();
+}
+
+QSettings::Status Settings::status() const
+{
+    Q_D(const Settings);
+    return d->status();
+}
+
+void Settings::beginGroup(const QString &prefix)
+{
+    Q_D(Settings);
+    d->beginGroup(prefix);
+}
+
+void Settings::endGroup()
+{
+    Q_D(Settings);
+    d->endGroup();
+}
+
+QString Settings::group() const
+{
+    Q_D(const Settings);
+    return d->group();
+}
+
+int Settings::beginReadArray(const QString& prefix)
+{
+    Q_D(Settings);
+    return d->beginReadArray(prefix);
+}
+
+void Settings::beginWriteArray(const QString& prefix, int size)
+{
+    Q_D(Settings);
+    return d->beginWriteArray(prefix, size);
+}
+
+void Settings::endArray()
+{
+    Q_D(Settings);
+    return d->endArray();
+}
+
+void Settings::setArrayIndex(int i)
+{
+    Q_D(Settings);
+    return d->setArrayIndex(i);
+}
+
+QStringList Settings::allKeys() const
+{
+    Q_D(const Settings);
+    return d->allKeys();
+}
+
+QStringList Settings::childKeys() const
+{
+    Q_D(const Settings);
+    return d->childKeys();
+}
+
+QStringList Settings::childGroups() const
+{
+    Q_D(const Settings);
+    return d->childGroups();
+}
+
+bool Settings::isWritable() const
+{
+    Q_D(const Settings);
+    return d->isWritable();
+}
+
+void Settings::setValue(const QString &key, const QVariant &value)
+{
+    Q_D(Settings);
+    d->setValue(key, value);
+}
+
 QVariant Settings::value(const QString &key, const QVariant &defaultValue) const
 {
-    QByteArray path = prefix_ + key.toLatin1();
-    qDebug("value(), path: %s", path.constData());
-    GVariant *val = dconf_client_read(client_, path.constData());
-    if (val)
-    {
-        const char *str = g_variant_get_string(val, NULL);
-        if (str)
-        {
-            QVariant qv = stringToVariant(str);
-            // g_variant_unref(val);
-            return qv;
-        }
-        // g_variant_unref(val);
-    }
-    return defaultValue;
+    Q_D(const Settings);
+    return d->value(key, defaultValue);
 }
+
+void Settings::remove(const QString &key)
+{
+    Q_D(Settings);
+    d->remove(key);
+}
+
+bool Settings::contains(const QString &key) const
+{
+    Q_D(const Settings);
+    return d->contains(key);
+}
+
+QString Settings::organizationName() const
+{
+    Q_D(const Settings);
+    return d->organizationName();
+}
+
+QString Settings::applicationName() const
+{
+    Q_D(const Settings);
+    return d->applicationName();
+}
+
+} // namespace LxQt

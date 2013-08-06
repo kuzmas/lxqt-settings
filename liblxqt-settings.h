@@ -16,38 +16,29 @@
     51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
 */
 
-#ifndef liblxqt_settings_H
-#define liblxqt_settings_H
+#ifndef LIBLXQT_SETTINGS_H
+#define LIBLXQT_SETTINGS_H
 
-extern "C" { // dconf does not do extern "C" properly in its header
-#include <dconf/dconf.h>
-}
-
+#include <QGlobalStatic>
 #include <QObject>
-#include <QByteArray>
+#include <QVariant>
 #include <QString>
 #include <QStringList>
-
 #include <QSettings>
 
 namespace LxQt
 {
 
+class SettingsPrivate;
+
 class Settings: public QObject
 {
     Q_OBJECT
+
 public:
-
-    explicit Settings(const QString &organization,
-                      const QString &application = QString(), QObject *parent = 0);
-    // Settings(QSettings::Scope scope, const QString& organization,
-    //          const QString& application = QString());
-
-    // Settings(QSettings::Format format, Scope scope, const QString& organization,
-    //          const QString& application = QString());
-
-    // Settings(const QString& fileName, Format format);
-
+    explicit Settings(QObject *parent = 0); // Uses QCoreApplication
+    explicit Settings(const QString &organization, const QString &application,
+                      QObject *parent = 0);
     ~Settings();
 
     void clear(); // does nothing
@@ -58,10 +49,10 @@ public:
     void endGroup();
     QString group() const;
 
-    // int beginReadArray(const QString& prefix);
-    // void beginWriteArray(const QString& prefix, int size = -1);
-    // void endArray();
-    // void setArrayIndex(int i);
+    int beginReadArray(const QString& prefix);
+    void beginWriteArray(const QString& prefix, int size = -1);
+    void endArray();
+    void setArrayIndex(int i);
 
     QStringList allKeys() const;
     QStringList childKeys() const;
@@ -74,36 +65,15 @@ public:
     void remove(const QString &key);
     bool contains(const QString &key) const;
 
-    void setFallbacksEnabled(bool b); // does nothing
-    bool fallbacksEnabled() const;
-
-    QString fileName() const; // does nothing
-    QSettings::Format format() const; // does nothing
-    QSettings::Scope scope() const; // does nothing
     QString organizationName() const;
     QString applicationName() const;
 
-    /*
-    static void setDefaultFormat(Format format);
-    static Format defaultFormat();
-    static void setPath(Format format, Scope scope, const QString& path);
-    */
 private:
-    static QString variantToString(const QVariant &v);
-    static QVariant stringToVariant(const QString &s);
-    static QStringList splitArgs(const QString &s, int idx);
-
-private Q_SLOTS:
-
-private:
-    DConfClient *client_;
-    QString organizationName_;
-    QString applicationName_;
-    QByteArray prefix_;
-    // int arrayIndex_;
     Q_DISABLE_COPY(Settings)
+    SettingsPrivate *d_ptr;
+    Q_DECLARE_PRIVATE_D(d_ptr, Settings)
 };
 
-}
+} // namespace LxQt
 
-#endif // liblxqt_settings_H
+#endif // LIBLXQT_SETTINGS_H
