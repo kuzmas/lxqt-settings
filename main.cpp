@@ -5,8 +5,10 @@
 int main(int argc, char **argv)
 {
     QCoreApplication app(argc, argv);
+    app.setOrganizationName("lxde");
+    app.setApplicationName("setting_test");
 
-    LxQt::Settings settings("lxde", "setting_test");
+    LxQt::Settings settings;
 
     settings.beginGroup("testGroup");
     QVariant v = settings.value("Test");
@@ -14,10 +16,10 @@ int main(int argc, char **argv)
     settings.endGroup();
 
     settings.beginGroup("testGroup2");
-    settings.setValue("write TestStr", "Test");
-    settings.setValue("write TestInt", 123);
-    settings.setValue("write TestBool", true);
-    settings.setValue("write TestFloat", 123.45);
+    settings.setValue("TestStr", "Test");
+    settings.setValue("TestInt", 123);
+    settings.setValue("TestBool", true);
+    settings.setValue("TestFloat", 123.45);
     qDebug("group: %s", settings.group().toLatin1().constData());
     settings.endGroup();
 
