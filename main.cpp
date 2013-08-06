@@ -15,7 +15,7 @@ int main(int argc, char** argv) {
   settings.beginGroup("testGroup2");
   settings.setValue("write TestStr", "Test");
   settings.setValue("write TestInt", 123);
-  settings.setValue("write TestBool", bool(true));
+  settings.setValue("write TestBool", true);
   settings.setValue("write TestFloat", 123.45);
   qDebug("group: %s", settings.group().toLatin1().constData());
   settings.endGroup();
