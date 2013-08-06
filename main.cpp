@@ -29,5 +29,5 @@ int main(int argc, char** argv) {
   qDebug("read TestFloat: %f", settings.value("TestFloat").toFloat());
   settings.endGroup();
 
-  return app.exec();
+//  return app.exec();
 }
