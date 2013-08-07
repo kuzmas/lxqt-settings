@@ -41,7 +41,7 @@ public:
                       QObject *parent = 0);
     ~Settings();
 
-    void clear(); // does nothing
+    void clear();
     void sync();
     QSettings::Status status() const;
 
@@ -50,7 +50,7 @@ public:
     QString group() const;
 
     int beginReadArray(const QString& prefix);
-    void beginWriteArray(const QString& prefix, int size = -1);
+    void beginWriteArray(const QString& prefix);
     void endArray();
     void setArrayIndex(int i);
 

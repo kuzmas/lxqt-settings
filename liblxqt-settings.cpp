@@ -20,9 +20,13 @@
 #include "liblxqt-settings.h"
 
 #include <QCoreApplication>
+#include <QStack>
+#include <QRegExp>
 #include <QSize>
 #include <QPoint>
 #include <QRect>
+
+#include <QDebug>
 
 extern "C" { // dconf does not do extern "C" properly in its header
 #include <dconf/dconf.h>
@@ -43,7 +47,7 @@ public:
     SettingsPrivate(const QString &organization, const QString &application);
     ~SettingsPrivate();
 
-    void clear(); // does nothing
+    void clear();
     void sync();
     QSettings::Status status() const;
 
@@ -52,7 +56,7 @@ public:
     QString group() const;
 
     int beginReadArray(const QString& prefix);
-    void beginWriteArray(const QString& prefix, int size = -1);
+    void beginWriteArray(const QString& prefix);
     void endArray();
     void setArrayIndex(int i);
 
@@ -74,8 +78,12 @@ private:
     DConfClient *m_client;
     QString m_organizationName;
     QString m_applicationName;
-    QByteArray m_prefix; // QStringList ?
-    // int m_arrayIndex;
+    QStringList m_path;
+    QString m_currentPath;
+    QStack<bool> m_groups;
+
+    static QString normalisedPath(const QString &path);
+    QStringList allKeys(const char *path, const QString &prefix) const;
 };
 
 SettingsPrivate::SettingsPrivate(const QString &organization, const QString &application)
@@ -83,11 +91,13 @@ SettingsPrivate::SettingsPrivate(const QString &organization, const QString &app
     , m_organizationName(organization)
     , m_applicationName(application)
 {
-    m_prefix = (QString("/org/") + m_organizationName + "/").toLatin1();
+    m_currentPath = QLatin1String("/org/") + m_organizationName;
     if (!m_applicationName.isEmpty())
     {
-        m_prefix += (m_applicationName + "/").toLatin1();
+        m_currentPath += QLatin1String("/") + m_applicationName;
     }
+    m_path << m_currentPath;
+    m_currentPath += QLatin1Char('/');
 
 // not sure if this condition should be compile-time:
 #if (G_ENCODE_VERSION (GLIB_MAJOR_VERSION, GLIB_MINOR_VERSION)) < GLIB_VERSION_2_36
@@ -104,9 +114,19 @@ SettingsPrivate::~SettingsPrivate()
     }
 }
 
+QString SettingsPrivate::normalisedPath(const QString &path)
+{
+    QString normalisedPrefix = path;
+    static QRegExp rx(QLatin1String("(^/+)|(//+)|(/+$)"));
+    if (normalisedPrefix.indexOf(rx) != -1) // alternative condition: (normalisedPrefix.startsWith('/') || normalisedPrefix.endsWith('/') || (normalisedPrefix.indexOf("//") != -1))
+        normalisedPrefix = normalisedPrefix.remove(rx);
+    return normalisedPrefix;
+}
+
 void SettingsPrivate::clear()
 {
-
+    qDebug() << "clear(), path: " << m_currentPath;
+    dconf_client_write_sync(m_client, m_currentPath.toLatin1().constData(), NULL, NULL, NULL, NULL);
 }
 
 void SettingsPrivate::sync()
@@ -119,80 +139,193 @@ QSettings::Status SettingsPrivate::status() const
     return QSettings::NoError; // FIXME: should we omit errors?
 }
 
-// FIXME: what if prefix contains '/' ?
 void SettingsPrivate::beginGroup(const QString &prefix)
 {
-    m_prefix.append(prefix + '/');
+    QString path = normalisedPath(prefix);
 
-    qDebug("beginGroup, current prefix: %s", m_prefix.constData());
+    m_path += path;
+    m_currentPath = m_path.join(QLatin1String("/")) + QLatin1Char('/');
+    m_groups.push(true);
+
+    qDebug() << "beginGroup, m_currentPath: " << m_currentPath;
 }
 
 void SettingsPrivate::endGroup()
 {
-    if (m_prefix.length() > 2)
+    if (m_groups.isEmpty())
     {
-        int sep = m_prefix.lastIndexOf('/', m_prefix.length() - 2);
-        if (sep != -1)
-        {
-            m_prefix = m_prefix.left(sep + 1);
-        }
-        qDebug("endGroup, current prefix: %s", m_prefix.constData());
+        qWarning() << "endGroup() called with no groups";
+        return;
     }
+
+    if (!m_groups.top())
+    {
+        qWarning() << "endGroup() called on an array";
+        return;
+    }
+
+    if (m_path.length() <= 1)
+    {
+        qWarning() << "endArray() called on a corrupted path";
+        return;
+    }
+
+    m_path.removeLast();
+    m_currentPath = m_path.join(QLatin1String("/")) + QLatin1Char('/');
+    m_groups.pop();
+
+    qDebug() << "endGroup, m_currentPath: " << m_currentPath;
 }
 
 QString SettingsPrivate::group() const
 {
-    if (m_prefix.length() > 2)
-    {
-        int sep = m_prefix.lastIndexOf('/', m_prefix.length() - 2);
-        if (sep != -1)
-        {
-            ++sep;
-            return m_prefix.mid(sep, m_prefix.length() - sep - 1);
-        }
-    }
-    return QString();
+    return QStringList(m_path.mid(1)).join(QLatin1String("/"));
 }
 
 int SettingsPrivate::beginReadArray(const QString &prefix)
 {
-    return 0;
+    QString path = normalisedPath(prefix);
+
+    m_path += path;
+
+    int result = 0;
+    Q_FOREACH (QString group, childGroups())
+    {
+        bool ok;
+        int index = group.toInt(&ok);
+        if (ok)
+            result = index + 1;
+    }
+
+    m_path += QLatin1String("0");
+    m_currentPath = m_path.join(QLatin1String("/")) + QLatin1Char('/');
+    m_groups.push(false);
+
+    qDebug() << "beginReadArray, m_currentPath: " << m_currentPath;
+
+    return result;
 }
 
-void SettingsPrivate::beginWriteArray(const QString &prefix, int size)
+void SettingsPrivate::beginWriteArray(const QString &prefix)
 {
+    QString path = normalisedPath(prefix);
+
+    m_path += path;
+    m_path += QLatin1String("0");
+    m_currentPath = m_path.join(QLatin1String("/")) + QLatin1Char('/');
+    m_groups.push(false);
+
+    qDebug() << "beginWriteArray, m_currentPath: " << m_currentPath;
 }
 
 void SettingsPrivate::endArray()
 {
+    if (m_groups.isEmpty())
+    {
+        qWarning() << "endArray() called with no arrays";
+        return;
+    }
+
+    if (!m_groups.top())
+    {
+        qWarning() << "endArray() called on a group";
+        return;
+    }
+
+    if (m_path.length() <= 2)
+    {
+        qWarning() << "endArray() called on a corrupted path";
+        return;
+    }
+
+    m_path.removeLast();
+    m_path.removeLast();
+    m_currentPath = m_path.join(QLatin1String("/")) + QLatin1Char('/');
+    m_groups.pop();
+
+    qDebug() << "endGroup, m_currentPath: " << m_currentPath;
 }
 
 void SettingsPrivate::setArrayIndex(int i)
 {
+    if (m_groups.isEmpty())
+    {
+        qWarning() << "setArrayIndex() called with no arrays";
+        return;
+    }
+
+    if (!m_groups.top())
+    {
+        qWarning() << "setArrayIndex() called on a group";
+        return;
+    }
+
+    if (m_path.length() <= 2)
+    {
+        qWarning() << "setArrayIndex() called on a corrupted path";
+        return;
+    }
+
+    m_path.removeLast();
+    m_path += QString::number(i);
+    m_currentPath = m_path.join(QLatin1String("/")) + QLatin1Char('/');
+
+    qDebug() << "endGroup, m_currentPath: " << m_currentPath;
 }
 
 QStringList SettingsPrivate::allKeys() const
 {
+    dconf_client_sync(m_client);
+
+    QString prefix = group();
+    if (!prefix.isEmpty())
+    {
+        prefix += QLatin1Char('/');
+    }
+    return allKeys(m_currentPath.toLatin1().constData(), prefix);
+}
+
+QStringList SettingsPrivate::allKeys(const char *path, const QString &prefix) const
+{
     QStringList result;
 
-    // TODO: implement
+    char **keys = dconf_client_list(m_client, path, NULL);
+
+    if (keys)
+    {
+        for (char **key = keys; *key; ++key)
+        {
+            if (dconf_is_rel_dir(*key, NULL))
+            {
+                result += allKeys((QString(path) + *key).toLatin1().constData(), prefix + *key);
+            }
+            else if (dconf_is_rel_key(*key, NULL))
+            {
+                result += prefix + *key;
+            }
+        }
+
+        g_strfreev(keys);
+    }
 
     return result;
 }
 
 QStringList SettingsPrivate::childKeys() const
 {
+    dconf_client_sync(m_client);
+
     QStringList result;
-    int len;
-    char **keys = dconf_client_list(m_client, m_prefix.constData(), &len);
+
+    char **keys = dconf_client_list(m_client, m_currentPath.toLatin1().constData(), NULL);
 
     if (keys)
     {
         for (char **key = keys; *key; ++key)
         {
-            if (!dconf_is_key(*key, NULL)) // if this is not a dir
+            if (dconf_is_rel_key(*key, NULL))
             {
-                result.append(*key);
+                result += *key;
             }
         }
 
@@ -204,17 +337,19 @@ QStringList SettingsPrivate::childKeys() const
 
 QStringList SettingsPrivate::childGroups() const
 {
+    dconf_client_sync(m_client);
+
     QStringList result;
-    int len;
-    char **keys = dconf_client_list(m_client, m_prefix.constData(), &len);
+
+    char **keys = dconf_client_list(m_client, m_currentPath.toLatin1().constData(), NULL);
 
     if (keys)
     {
         for (char **key = keys; *key; ++key)
         {
-            if (dconf_is_dir(*key, NULL))
+            if (dconf_is_rel_dir(*key, NULL))
             {
-                result.append(*key);
+                result += *key;
             }
         }
 
@@ -226,18 +361,18 @@ QStringList SettingsPrivate::childGroups() const
 
 bool SettingsPrivate::isWritable() const
 {
-    return bool(dconf_client_is_writable(m_client, m_prefix.constData()));
+    return bool(dconf_client_is_writable(m_client, m_currentPath.toLatin1().constData()));
 }
 
 void SettingsPrivate::setValue(const QString &key, const QVariant &value)
 {
     GError *err = NULL;
     QString str = variantToString(value);
-    QByteArray path = m_prefix + key.toLatin1();
+    QString path = m_currentPath + normalisedPath(key);
     GVariant *val = g_variant_new_string(str.toUtf8().constData());
     g_variant_ref_sink(val);
-    qDebug("setValue: path: %s, value: %s", path.constData(), g_variant_get_string(val, NULL));
-    dconf_client_write_fast(m_client, path.constData(), val, &err);
+    qDebug() << "setValue: path: " << path << ", value: " << g_variant_get_string(val, NULL);
+    dconf_client_write_fast(m_client, path.toLatin1().constData(), val, &err);
     if (val)
     {
         g_variant_unref(val);
@@ -245,16 +380,18 @@ void SettingsPrivate::setValue(const QString &key, const QVariant &value)
 
     if (err)
     {
-        qDebug("error: %s", err->message);
+        qDebug() << "error: " << err->message;
         g_error_free(err);
     }
 }
 
 QVariant SettingsPrivate::value(const QString &key, const QVariant &defaultValue) const
 {
-    QByteArray path = m_prefix + key.toLatin1();
-    qDebug("value(), path: %s", path.constData());
-    GVariant *val = dconf_client_read(m_client, path.constData());
+    dconf_client_sync(m_client);
+
+    QString path = m_currentPath + normalisedPath(key);
+    qDebug() << "value(), path: " << path;
+    GVariant *val = dconf_client_read(m_client, path.toLatin1().constData());
     if (val)
     {
         const char *str = g_variant_get_string(val, NULL);
@@ -271,13 +408,18 @@ QVariant SettingsPrivate::value(const QString &key, const QVariant &defaultValue
 
 void SettingsPrivate::remove(const QString &key)
 {
-    QByteArray path = m_prefix + key.toLatin1();
-    dconf_client_write_sync(m_client, path.constData(), NULL, NULL, NULL, NULL);
+    QString path = m_currentPath + normalisedPath(key);
+    qDebug() << "remove(), path: " << path;
+    dconf_client_write_sync(m_client, path.toLatin1().constData(), NULL, NULL, NULL, NULL);
 }
 
 bool SettingsPrivate::contains(const QString &key) const
 {
-    return false;
+    dconf_client_sync(m_client);
+
+    QString path = m_currentPath + normalisedPath(key);
+    qDebug() << "contains(), path: " << path;
+    return dconf_client_read(m_client, path.toLatin1().constData()) != NULL;
 }
 
 QString SettingsPrivate::organizationName() const
@@ -570,10 +712,10 @@ int Settings::beginReadArray(const QString& prefix)
     return d->beginReadArray(prefix);
 }
 
-void Settings::beginWriteArray(const QString& prefix, int size)
+void Settings::beginWriteArray(const QString& prefix)
 {
     Q_D(Settings);
-    return d->beginWriteArray(prefix, size);
+    return d->beginWriteArray(prefix);
 }
 
 void Settings::endArray()
