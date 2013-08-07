@@ -82,6 +82,9 @@ private:
     QString m_currentPath;
     QStack<bool> m_groups;
 
+    static void c_dconfChanged(DConfClient *client, gchar *prefix, GStrv changes, gchar *tag, gpointer user_data);
+    void dconfChanged(gchar *prefix, GStrv changes, gchar *tag);
+
     static QString normalisedPath(const QString &path);
     QStringList allKeys(const char *path, const QString &prefix) const;
 };
@@ -104,13 +107,47 @@ SettingsPrivate::SettingsPrivate(const QString &organization, const QString &app
     g_type_init();
 #endif
     m_client = dconf_client_new();
+
+    if (m_client)
+    {
+        g_signal_connect(m_client, "changed", G_CALLBACK(c_dconfChanged), this);
+        dconf_client_watch_fast(m_client, m_currentPath.toLatin1().constData());
+    }
 }
 
 SettingsPrivate::~SettingsPrivate()
 {
     if (m_client)
     {
+        dconf_client_unwatch_fast(m_client, (m_path[0] + QLatin1Char('/')).toLatin1().constData());
+        g_signal_handlers_disconnect_by_data(m_client, this);
         g_object_unref(m_client);
+    }
+}
+
+void SettingsPrivate::c_dconfChanged(DConfClient *client, gchar *prefix, GStrv changes, gchar *tag, gpointer user_data)
+{
+    Q_UNUSED(client);
+    static_cast<SettingsPrivate*>(user_data)->dconfChanged(prefix, changes, tag);
+}
+
+void SettingsPrivate::dconfChanged(gchar *prefix, GStrv changes, gchar *tag)
+{
+    qDebug() << "dconfChanged(), prefix: " << prefix;
+    for (char **change = changes; *change; ++change)
+        qDebug() << "dconfChanged(), change: " << *change;
+    qDebug() << "dconfChanged(), tag: " << tag;
+
+    if (!m_path.isEmpty())
+    {
+        QString qPrefix(prefix);
+        if (qPrefix.length() > m_path[0].length() + 1)
+        {
+            qPrefix = qPrefix.mid(m_path[0].length() + 1);
+            qDebug() << "dconfChanged(), qPrefix: " << qPrefix;
+            Q_Q(Settings);
+            Q_EMIT q->changed(qPrefix);
+        }
     }
 }
 

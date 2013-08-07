@@ -68,6 +68,9 @@ public:
     QString organizationName() const;
     QString applicationName() const;
 
+Q_SIGNALS:
+    void changed(QString);
+
 private:
     Q_DISABLE_COPY(Settings)
     SettingsPrivate *d_ptr;
