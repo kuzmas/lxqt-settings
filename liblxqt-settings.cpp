@@ -94,11 +94,12 @@ SettingsPrivate::SettingsPrivate(const QString &organization, const QString &app
     , m_organizationName(organization)
     , m_applicationName(application)
 {
-    m_currentPath = QLatin1String("/org/") + m_organizationName;
+    m_currentPath = m_organizationName;
     if (!m_applicationName.isEmpty())
     {
         m_currentPath += QLatin1String("/") + m_applicationName;
     }
+    m_currentPath = QLatin1String("/") + normalisedPath(m_currentPath);
     m_path << m_currentPath;
     m_currentPath += QLatin1Char('/');
 
@@ -155,7 +156,7 @@ QString SettingsPrivate::normalisedPath(const QString &path)
 {
     QString normalisedPrefix = path;
     static QRegExp rx(QLatin1String("(^/+)|(//+)|(/+$)"));
-    if (normalisedPrefix.indexOf(rx) != -1) // alternative condition: (normalisedPrefix.startsWith('/') || normalisedPrefix.endsWith('/') || (normalisedPrefix.indexOf("//") != -1))
+    if (normalisedPrefix.indexOf(rx) != -1) // alternative condition: (normalisedPrefix.startsWith(QLatin1Char('/')) || normalisedPrefix.endsWith(QLatin1Char('/')) || (normalisedPrefix.indexOf(QLatin1String("//")) != -1))
         normalisedPrefix = normalisedPrefix.remove(rx);
     return normalisedPrefix;
 }
@@ -684,12 +685,12 @@ Settings::Settings(QObject *parent)
     , d_ptr(new SettingsPrivate(
 #ifdef Q_OS_MAC
         QCoreApplication::organizationDomain().isEmpty()
-            ? QCoreApplication::organizationName()
-            : QCoreApplication::organizationDomain() ,
+            ? (QLatin1String("org/") + QCoreApplication::organizationName())
+            : QCoreApplication::organizationDomain().replace(QLatin1Char('.'), QLatin1Char('/')) ,
 #else
         QCoreApplication::organizationName().isEmpty()
-            ? QCoreApplication::organizationDomain()
-            : QCoreApplication::organizationName() ,
+            ? QCoreApplication::organizationDomain().replace(QLatin1Char('.'), QLatin1Char('/'))
+            : (QLatin1String("org/") + QCoreApplication::organizationName()) ,
 #endif
         QCoreApplication::applicationName()))
 {
@@ -697,7 +698,7 @@ Settings::Settings(QObject *parent)
 
 Settings::Settings(const QString &organization, const QString &application, QObject *parent)
     : QObject(parent)
-    , d_ptr(new SettingsPrivate(organization, application))
+    , d_ptr(new SettingsPrivate(QLatin1String("org/") + organization, application))
 {
 }
 
